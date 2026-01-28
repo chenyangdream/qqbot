@@ -1,4 +1,4 @@
-import type { ChannelPlugin, MoltbotPluginApi } from "clawdbot/plugin-sdk";
+import type { ChannelPlugin } from "clawdbot/plugin-sdk";
 import type { ResolvedQQBotAccount } from "./types.js";
 import { listQQBotAccountIds, resolveQQBotAccount, applyQQBotAccountConfig } from "./config.js";
 import { sendText } from "./outbound.js";
@@ -39,7 +39,6 @@ export const qqbotPlugin: ChannelPlugin<ResolvedQQBotAccount> = {
   setup: {
     validateInput: ({ input }) => {
       if (!input.token && !input.tokenFile && !input.useEnv) {
-        // token 在这里是 appId:clientSecret 格式
         return "QQBot requires --token (format: appId:clientSecret) or --use-env";
       }
       return null;
@@ -49,7 +48,6 @@ export const qqbotPlugin: ChannelPlugin<ResolvedQQBotAccount> = {
       let clientSecret = "";
 
       if (input.token) {
-        // 支持 appId:clientSecret 格式
         const parts = input.token.split(":");
         if (parts.length === 2) {
           appId = parts[0];
@@ -80,32 +78,16 @@ export const qqbotPlugin: ChannelPlugin<ResolvedQQBotAccount> = {
   },
   gateway: {
     startAccount: async (ctx) => {
-      const { account, abortSignal, log, runtime } = ctx;
-      
+      const { account, abortSignal, log, cfg } = ctx;
+
       log?.info(`[qqbot:${account.accountId}] Starting gateway`);
 
       await startGateway({
         account,
         abortSignal,
+        cfg,
         log,
-        onMessage: (event) => {
-          log?.info(`[qqbot:${account.accountId}] Message from ${event.senderId}: ${event.content}`);
-          // 消息处理会通过 runtime 发送到 moltbot 核心
-          runtime.emit?.("message", {
-            channel: "qqbot",
-            accountId: account.accountId,
-            chatType: event.type === "c2c" ? "direct" : "group",
-            senderId: event.senderId,
-            senderName: event.senderName,
-            content: event.content,
-            messageId: event.messageId,
-            timestamp: event.timestamp,
-            channelId: event.channelId,
-            guildId: event.guildId,
-            raw: event.raw,
-          });
-        },
-        onReady: (data) => {
+        onReady: () => {
           log?.info(`[qqbot:${account.accountId}] Gateway ready`);
           ctx.setStatus({
             ...ctx.getStatus(),

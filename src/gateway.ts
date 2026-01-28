@@ -1,18 +1,18 @@
 import WebSocket from "ws";
 import type { ResolvedQQBotAccount, WSPayload, C2CMessageEvent, GuildMessageEvent } from "./types.js";
-import { getAccessToken, getGatewayUrl } from "./api.js";
+import { getAccessToken, getGatewayUrl, sendC2CMessage, sendChannelMessage } from "./api.js";
+import { getQQBotRuntime } from "./runtime.js";
 
 // QQ Bot intents
 const INTENTS = {
   PUBLIC_GUILD_MESSAGES: 1 << 30,
   DIRECT_MESSAGE: 1 << 25,
-  // C2C 私聊在 PUBLIC_GUILD_MESSAGES 里
 };
 
 export interface GatewayContext {
   account: ResolvedQQBotAccount;
   abortSignal: AbortSignal;
-  onMessage: (event: GatewayMessageEvent) => void;
+  cfg: unknown;
   onReady?: (data: unknown) => void;
   onError?: (error: Error) => void;
   log?: {
@@ -22,28 +22,17 @@ export interface GatewayContext {
   };
 }
 
-export interface GatewayMessageEvent {
-  type: "c2c" | "guild" | "dm";
-  senderId: string;
-  senderName?: string;
-  content: string;
-  messageId: string;
-  timestamp: string;
-  channelId?: string;
-  guildId?: string;
-  raw: unknown;
-}
-
 /**
  * 启动 Gateway WebSocket 连接
  */
 export async function startGateway(ctx: GatewayContext): Promise<void> {
-  const { account, abortSignal, onMessage, onReady, onError, log } = ctx;
+  const { account, abortSignal, cfg, onReady, onError, log } = ctx;
 
   if (!account.appId || !account.clientSecret) {
     throw new Error("QQBot not configured (missing appId or clientSecret)");
   }
 
+  const pluginRuntime = getQQBotRuntime();
   const accessToken = await getAccessToken(account.appId, account.clientSecret);
   const gatewayUrl = await getGatewayUrl(accessToken);
 
@@ -64,6 +53,121 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
   };
 
   abortSignal.addEventListener("abort", cleanup);
+
+  // 处理收到的消息
+  const handleMessage = async (event: {
+    type: "c2c" | "guild" | "dm";
+    senderId: string;
+    senderName?: string;
+    content: string;
+    messageId: string;
+    timestamp: string;
+    channelId?: string;
+    guildId?: string;
+  }) => {
+    log?.info(`[qqbot:${account.accountId}] Processing message from ${event.senderId}: ${event.content}`);
+
+    pluginRuntime.channel.activity.record({
+      channel: "qqbot",
+      accountId: account.accountId,
+      direction: "inbound",
+    });
+
+    const isGroup = event.type === "guild";
+    const peerId = isGroup ? `channel:${event.channelId}` : event.senderId;
+
+    const route = pluginRuntime.channel.routing.resolveAgentRoute({
+      cfg,
+      channel: "qqbot",
+      accountId: account.accountId,
+      peer: {
+        kind: isGroup ? "group" : "dm",
+        id: peerId,
+      },
+    });
+
+    const envelopeOptions = pluginRuntime.channel.reply.resolveEnvelopeFormatOptions(cfg);
+
+    const body = pluginRuntime.channel.reply.formatInboundEnvelope({
+      channel: "QQBot",
+      from: event.senderName ?? event.senderId,
+      timestamp: new Date(event.timestamp).getTime(),
+      body: event.content,
+      chatType: isGroup ? "group" : "direct",
+      sender: {
+        id: event.senderId,
+        name: event.senderName,
+      },
+      envelope: envelopeOptions,
+    });
+
+    const fromAddress = isGroup
+      ? `qqbot:channel:${event.channelId}`
+      : `qqbot:${event.senderId}`;
+    const toAddress = fromAddress;
+
+    const ctxPayload = pluginRuntime.channel.reply.finalizeInboundContext({
+      Body: body,
+      RawBody: event.content,
+      CommandBody: event.content,
+      From: fromAddress,
+      To: toAddress,
+      SessionKey: route.sessionKey,
+      AccountId: route.accountId,
+      ChatType: isGroup ? "group" : "direct",
+      SenderId: event.senderId,
+      SenderName: event.senderName,
+      Provider: "qqbot",
+      Surface: "qqbot",
+      MessageSid: event.messageId,
+      Timestamp: new Date(event.timestamp).getTime(),
+      OriginatingChannel: "qqbot",
+      OriginatingTo: toAddress,
+      // QQBot 特有字段
+      QQChannelId: event.channelId,
+      QQGuildId: event.guildId,
+    });
+
+    // 分发到 AI 系统
+    try {
+      const messagesConfig = pluginRuntime.channel.reply.resolveEffectiveMessagesConfig(cfg, route.agentId);
+
+      await pluginRuntime.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
+        ctx: ctxPayload,
+        cfg,
+        dispatcherOptions: {
+          responsePrefix: messagesConfig.responsePrefix,
+          deliver: async (payload: { text?: string }) => {
+            const replyText = payload.text ?? "";
+            if (!replyText.trim()) return;
+
+            try {
+              if (event.type === "c2c") {
+                await sendC2CMessage(accessToken, event.senderId, replyText, event.messageId);
+              } else if (event.channelId) {
+                await sendChannelMessage(accessToken, event.channelId, replyText, event.messageId);
+              }
+              log?.info(`[qqbot:${account.accountId}] Sent reply`);
+
+              pluginRuntime.channel.activity.record({
+                channel: "qqbot",
+                accountId: account.accountId,
+                direction: "outbound",
+              });
+            } catch (err) {
+              log?.error(`[qqbot:${account.accountId}] Send failed: ${err}`);
+            }
+          },
+          onError: (err: unknown) => {
+            log?.error(`[qqbot:${account.accountId}] Dispatch error: ${err}`);
+          },
+        },
+        replyOptions: {},
+      });
+    } catch (err) {
+      log?.error(`[qqbot:${account.accountId}] Message processing failed: ${err}`);
+    }
+  };
 
   ws.on("open", () => {
     log?.info(`[qqbot:${account.accountId}] WebSocket connected`);
@@ -105,17 +209,16 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
             onReady?.(d);
           } else if (t === "C2C_MESSAGE_CREATE") {
             const event = d as C2CMessageEvent;
-            onMessage({
+            await handleMessage({
               type: "c2c",
               senderId: event.author.user_openid,
               content: event.content,
               messageId: event.id,
               timestamp: event.timestamp,
-              raw: event,
             });
           } else if (t === "AT_MESSAGE_CREATE") {
             const event = d as GuildMessageEvent;
-            onMessage({
+            await handleMessage({
               type: "guild",
               senderId: event.author.id,
               senderName: event.author.username,
@@ -124,11 +227,10 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
               timestamp: event.timestamp,
               channelId: event.channel_id,
               guildId: event.guild_id,
-              raw: event,
             });
           } else if (t === "DIRECT_MESSAGE_CREATE") {
             const event = d as GuildMessageEvent;
-            onMessage({
+            await handleMessage({
               type: "dm",
               senderId: event.author.id,
               senderName: event.author.username,
@@ -136,7 +238,6 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
               messageId: event.id,
               timestamp: event.timestamp,
               guildId: event.guild_id,
-              raw: event,
             });
           }
           break;
