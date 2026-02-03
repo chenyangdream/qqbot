@@ -63,7 +63,7 @@ export function resolveQQBotAccount(
       dmPolicy: qqbot?.dmPolicy,
       allowFrom: qqbot?.allowFrom,
       systemPrompt: qqbot?.systemPrompt,
-      imageServerBaseUrl: qqbot?.imageServerBaseUrl,
+      imageServerPublicIp: qqbot?.imageServerPublicIp,
     };
     appId = qqbot?.appId ?? "";
   } else {
@@ -98,7 +98,7 @@ export function resolveQQBotAccount(
     clientSecret,
     secretSource,
     systemPrompt: accountConfig.systemPrompt,
-    imageServerBaseUrl: accountConfig.imageServerBaseUrl || process.env.QQBOT_IMAGE_SERVER_BASE_URL,
+    imageServerPublicIp: accountConfig.imageServerPublicIp || process.env.QQBOT_IMAGE_SERVER_PUBLIC_IP,
     config: accountConfig,
   };
 }
@@ -109,7 +109,7 @@ export function resolveQQBotAccount(
 export function applyQQBotAccountConfig(
   cfg: MoltbotConfig,
   accountId: string,
-  input: { appId?: string; clientSecret?: string; clientSecretFile?: string; name?: string; imageServerBaseUrl?: string }
+  input: { appId?: string; clientSecret?: string; clientSecretFile?: string; name?: string; imageServerPublicIp?: string }
 ): MoltbotConfig {
   const next = { ...cfg };
 
@@ -126,7 +126,7 @@ export function applyQQBotAccountConfig(
             ? { clientSecretFile: input.clientSecretFile }
             : {}),
         ...(input.name ? { name: input.name } : {}),
-        ...(input.imageServerBaseUrl ? { imageServerBaseUrl: input.imageServerBaseUrl } : {}),
+        ...(input.imageServerPublicIp ? { imageServerPublicIp: input.imageServerPublicIp } : {}),
       },
     };
   } else {
@@ -147,7 +147,7 @@ export function applyQQBotAccountConfig(
                 ? { clientSecretFile: input.clientSecretFile }
                 : {}),
             ...(input.name ? { name: input.name } : {}),
-            ...(input.imageServerBaseUrl ? { imageServerBaseUrl: input.imageServerBaseUrl } : {}),
+            ...(input.imageServerPublicIp ? { imageServerPublicIp: input.imageServerPublicIp } : {}),
           },
         },
       },

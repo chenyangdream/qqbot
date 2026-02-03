@@ -98,15 +98,16 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
     throw new Error("QQBot not configured (missing appId or clientSecret)");
   }
 
-  // 如果配置了公网 URL，启动图床服务器
+  // 如果配置了公网 IP，启动图床服务器
   let imageServerBaseUrl: string | null = null;
-  if (account.imageServerBaseUrl) {
-    // 使用用户配置的公网地址作为 baseUrl
-    await ensureImageServer(log, account.imageServerBaseUrl);
-    imageServerBaseUrl = account.imageServerBaseUrl;
+  if (account.imageServerPublicIp) {
+    // 内部组装完整 URL
+    const publicBaseUrl = `http://${account.imageServerPublicIp}:${IMAGE_SERVER_PORT}`;
+    await ensureImageServer(log, publicBaseUrl);
+    imageServerBaseUrl = publicBaseUrl;
     log?.info(`[qqbot:${account.accountId}] Image server enabled with URL: ${imageServerBaseUrl}`);
   } else {
-    log?.info(`[qqbot:${account.accountId}] Image server disabled (no imageServerBaseUrl configured)`);
+    log?.info(`[qqbot:${account.accountId}] Image server disabled (no imageServerPublicIp configured)`);
   }
 
   let reconnectAttempts = 0;

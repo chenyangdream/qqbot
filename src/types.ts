@@ -19,8 +19,8 @@ export interface ResolvedQQBotAccount {
   secretSource: "config" | "file" | "env" | "none";
   /** 系统提示词 */
   systemPrompt?: string;
-  /** 图床服务器公网地址 */
-  imageServerBaseUrl?: string;
+  /** 图床服务器公网 IP（内部自动组装成 http://IP:18765） */
+  imageServerPublicIp?: string;
   config: QQBotAccountConfig;
 }
 
@@ -37,8 +37,8 @@ export interface QQBotAccountConfig {
   allowFrom?: string[];
   /** 系统提示词，会添加在用户消息前面 */
   systemPrompt?: string;
-  /** 图床服务器公网地址，用于发送图片，例如 http://your-ip:18765 */
-  imageServerBaseUrl?: string;
+  /** 图床服务器公网 IP，用于发送图片，例如 1.2.3.4（内部自动组装成 http://IP:18765） */
+  imageServerPublicIp?: string;
 }
 
 /**
