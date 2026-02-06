@@ -401,7 +401,7 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
         groupOpenid?: string;
         attachments?: Array<{ content_type: string; url: string; filename?: string }>;
       }) => {
-        log?.info(`[qqbot:${account.accountId}] Processing message from ${event.senderId}: ${event.content}`);
+        log?.info(`[qqbot:${account.accountId}] Received Event: ${event}`);
         if (event.attachments?.length) {
           log?.info(`[qqbot:${account.accountId}] Attachments: ${event.attachments.length}`);
         }
