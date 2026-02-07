@@ -23,7 +23,7 @@ openclaw plugins install .
 
 ## 1. Register on the QQ Open Platform
 
-Go to the official website of the Tencent QQ Open Platform. You cannot log in directly with your personal QQ account by default; you need to register a new QQ Open Platform account.
+Go to the official website of the [Tencent QQ Open Platform](https://q.qq.com/). You cannot log in directly with your personal QQ account by default; you need to register a new QQ Open Platform account.
 <img width="2140" height="1004" alt="1" src="https://github.com/user-attachments/assets/d76a780c-5040-43fb-ac41-5808f975ae4b" />
 
 After the initial registration, follow the platform's instructions to set up a super administrator.
