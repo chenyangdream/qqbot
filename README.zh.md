@@ -20,7 +20,7 @@ openclaw plugins install .
 
 # 步骤2:创建QQ Bot
 ## 1.注册QQ开放平台
-前往腾讯QQ开放平台官网，默认无法使用您的QQ账号直接登录，需要新注册QQ开放平台账号。
+前往[腾讯QQ开放平台官网](https://q.qq.com/)，默认无法使用您的QQ账号直接登录，需要新注册QQ开放平台账号。
 <img width="2140" height="1004" alt="1" src="https://github.com/user-attachments/assets/d76a780c-5040-43fb-ac41-5808f975ae4b" />
 
 首次注册之后，可以按照QQ开放平台的指引设置超级管理员。
